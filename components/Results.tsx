@@ -104,14 +104,14 @@ export function AvailabilityResults() {
       
       {!isLoading && !hasFilteredResults && (
         <h2 className="text-2xl font-semibold mb-4 text-center">
-          i don't have that one yet 🫵😹
+          i don't have that one yet 😭
         </h2>
       )}
 
       {!isLoading && !hasFilteredResults && (
         <>
         <p className="text-center text-muted-foreground">
-          <a href="https://instagram.com/ab_raza" className="underline">get dinner w/ me</a> there and i'll add it
+          <a href="https://instagram.com/ab_raza" className="underline">get dinner w/ me</a> there and maybe i'll add it
         </p>
         </>
 
