@@ -1,9 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import * as types from '@/app/types/api'
-import type { ExternalBookingAvailabilityResponse, ExternalService, TimeSlot as ExternalTimeSlot } from '@/app/types/api'
+import type { ExternalBookingAvailabilityResponse, ExternalService, TimeSlot as ExternalTimeSlot, TimeSlotSection } from '@/app/types/api'
+
+// Helper function to normalize a single service
+function normalizeExternalService(externalService: ExternalService): types.MinimalService | null {
+  const minimalTimes: types.MinimalTimeSlot[] = [];
+
+  if (externalService.times) {
+    externalService.times.forEach((timeSlot: ExternalTimeSlot) => {
+      // Determine availability based on sections if they exist
+      let isAvailableBasedOnSections = true; // Default to true if no sections array
+      if (timeSlot.sections && timeSlot.sections.length > 0) {
+        isAvailableBasedOnSections = timeSlot.sections.some(
+          (section: TimeSlotSection) => section.sectionState === true && section.isSectionBlocked === false
+        );
+      }
+
+      // A slot is blocked if the API says so directly OR if sections exist and none are available
+      const isEffectivelyBlocked = timeSlot.isBlockOut || (timeSlot.sections && timeSlot.sections.length > 0 && !isAvailableBasedOnSections);
+
+      // Only add the timeslot if it's NOT effectively blocked
+      if (!isEffectivelyBlocked) {
+        minimalTimes.push({
+          name: timeSlot.name,
+          time: timeSlot.time,
+          isBlockOut: false, // We only include non-blocked slots, so this is always false here
+          onlySharedTablesRemain: timeSlot.onlySharedTablesRemain, // Pass this through
+        });
+      }
+    });
+  }
+
+  // Only return the service if it has available times after normalization
+  if (minimalTimes.length > 0) {
+    return {
+      name: externalService.name,
+      times: minimalTimes,
+    };
+  }
+
+  return null; // Return null if no available times for this service
+}
+
+// Define mock data
+const mockAvailabilityData: types.MinimalBookingAvailabilityResponse = {
+  services: [
+    {
+      name: "Mock Dinner Service",
+      times: [
+        { name: "6:00 PM", time: "18:00", isBlockOut: false, onlySharedTablesRemain: false },
+        { name: "6:30 PM", time: "18:30", isBlockOut: false, onlySharedTablesRemain: false },
+        { name: "7:00 PM", time: "19:00", isBlockOut: false, onlySharedTablesRemain: true },
+      ],
+    },
+    {
+      name: "Mock Late Night",
+      times: [
+        { name: "9:00 PM", time: "21:00", isBlockOut: false, onlySharedTablesRemain: false },
+        { name: "9:30 PM", time: "21:30", isBlockOut: false, onlySharedTablesRemain: false },
+      ],
+    },
+  ],
+};
 
 export async function GET(request: NextRequest) {
+  // Check for mock API flag
+  if (process.env.MOCK_API_ENABLED === 'true') {
+    console.log('[API /getAvailability] Returning MOCK data.');
+    // Simulate a short delay for mock responses if needed
+    // await new Promise(resolve => setTimeout(resolve, 300));
+    return NextResponse.json(mockAvailabilityData, { status: 200 });
+  }
+
   const { searchParams } = new URL(request.url)
   const venueId = searchParams.get('venueId')
   const date = searchParams.get('date') // Expected format: YYYY-MM-DD
@@ -43,7 +112,8 @@ export async function GET(request: NextRequest) {
       method: 'GET',
       headers: headers,
       // You might need to configure caching behavior if Next.js aggressively caches
-      cache: 'no-store',
+      // cache: 'no-store',
+      next: { revalidate: 4 }
     })
 
     if (!response.ok) {
@@ -60,41 +130,24 @@ export async function GET(request: NextRequest) {
     }
 
     const externalData: ExternalBookingAvailabilityResponse = await response.json();
-    console.log('[API /getAvailability] Raw External Data:', JSON.stringify(externalData, null, 2)); // Log raw data
+    // console.log('[API /getAvailability] Raw External Data:', JSON.stringify(externalData, null, 2)); // Keep for debugging if needed
 
-    // Process the data to extract only available time slots in the minimal format
-    const processedData: types.MinimalBookingAvailabilityResponse = {
-        services: []
-    };
-
+    // Process the data using the normalization function
+    const minimalServices: types.MinimalService[] = [];
     if (externalData && externalData.services) {
-        externalData.services.forEach((service: ExternalService) => {
-            const availableTimes: types.MinimalTimeSlot[] = [];
-            if (service.times) {
-                service.times.forEach((timeSlot: ExternalTimeSlot) => {
-                    // A time slot is considered potentially available if it is not blocked out.
-                    // We are ignoring bookingOptionsCount for now as it seems unreliable.
-                    if (!timeSlot.isBlockOut) {
-                        availableTimes.push({
-                            name: timeSlot.name,
-                            time: timeSlot.time,
-                            isBlockOut: false // Explicitly set based on our filter
-                        });
-                    }
-                });
-            }
-
-            // Only include services that have available times
-            if (availableTimes.length > 0) {
-                 processedData.services.push({
-                    name: service.name,
-                    times: availableTimes,
-                });
-            }
-        });
+      externalData.services.forEach((service: ExternalService) => {
+        const normalizedService = normalizeExternalService(service);
+        if (normalizedService) {
+          minimalServices.push(normalizedService);
+        }
+      });
     }
 
-    console.log('[API /getAvailability] Processed Data Sent to Frontend:', JSON.stringify(processedData, null, 2)); // Log processed data
+    const processedData: types.MinimalBookingAvailabilityResponse = {
+        services: minimalServices
+    };
+
+    // console.log('[API /getAvailability] Processed Data Sent to Frontend:', JSON.stringify(processedData, null, 2)); // Keep for debugging if needed
 
     return NextResponse.json(processedData, { status: 200 })
 

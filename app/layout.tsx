@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import DynamicFavicon from "@/components/DynamicFavicon";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,8 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const dataUri = `data:image/svg+xml,${svg}`;
 
   return {
-    title: "Dinner time",
-    description: "can i get uhhhh",
+    title: "dinner time",
+    description: "can i get uhhhh...",
     icons: {
       icon: dataUri, // Set the default emoji data URI as the initial icon
     },
@@ -32,8 +33,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {children}
-        <DynamicFavicon />
+        <ThemeProvider>
+          {children}
+          <DynamicFavicon />
+        </ThemeProvider>
       </body>
     </html>
   );

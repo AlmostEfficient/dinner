@@ -11,6 +11,7 @@ export interface BookingAvailabilityResponse {
     name: string; // e.g., "5:00pm"
     time: string; // ISO 8601 format string, e.g., "2025-05-02T17:00:00"
     isBlockOut: boolean; // true if blocked out (unavailable), false if potentially available
+    onlySharedTablesRemain: boolean; // true if only shared/communal tables are left for this slot
     // Note: A time slot might be 'not blocked out' but still have bookingOptionsCount = 0 or other constraints.
     // For a truly minimal approach just checking isBlockOut might suffice for a basic display,
     // assuming the API correctly sets isBlockOut for all truly unavailable slots.

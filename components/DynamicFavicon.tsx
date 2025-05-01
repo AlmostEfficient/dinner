@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 
 // List of food emojis
-const FOOD_EMOJIS = ["🍕", "🍔", "🍟", "🌭", "🍿", "🧂", "🥓", "🥚", "🍳", "🧇", "🥞", "🧈", "🍞", "🥐", "🥨", "🥯", "🥖", "🧀", "🥗", "🥙", "🥪", "🌮", "🌯", "🫔", "🥫", "🍖", "🍗", "🥩", "🍠", "🥟", "🍤", "🍚", "🍜", "🍲", "🍥", "🍙", "🍘", "🍢", "🍣", "🍱", "🥡", "🦪", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🍰", "🧁", "🥧", "🍫", "🍬", "🍭", "🍮", "🍯", "🍼", "☕", "🍵", "🍶", "🍾", "🍷", "🍸", "🍹", "🍺", "🍻", "🥂", "🥃", "🥤", "🧋", "🧃", "🧉", "🧊", "🥢", "🍽️", "🍴", "🥄", "🏺"];
+const FOOD_EMOJIS = ["🍕", "🍔", "🍟", "🌭", "🍿", "🥓", "🍳", "🧇", "🥞", "🧈", "🍞", "🥐", "🥨", "🥯", "🥖", "🧀", "🥗", "🥙", "🥪", "🌮", "🌯", "🫔", "🥫", "🍖", "🍗", "🥩", "🍠", "🥟", "🍤", "🍜", "🍲", "🍥", "🍙", "🍘", "🍢", "🍣", "🍱", "🥡", "🦪", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🍰", "🧁", "🥧", "🍫", "🍬", "🍭", "🍮", "🍯", "🍵", "🍶", "🍾", "🍷", "🍸", "🍹", "🍺", "🍻", "🥂", "🥃", "🥤", "🧋", "🧃", "🧉", "🧊", "🥢", "🍽️", "🏺"];
 
 // Helper function to create SVG data URI
 const createSvgDataUri = (emoji: string): string => {
@@ -43,7 +43,7 @@ export default function DynamicFavicon() {
       // Update the reference to the current link
       currentLink = newLink;
 
-    }, 2000); // Change every 2 seconds
+    }, 1200); // Change every 2 seconds
 
     // Cleanup interval on component unmount
     return () => {
