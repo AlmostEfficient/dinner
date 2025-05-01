@@ -7,6 +7,7 @@ import { RESTAURANTS } from '@/app/const/restaurants'
 import { Heart } from 'lucide-react'
 import { useState } from 'react'
 import { getCookie, setCookie } from 'cookies-next'; // Import cookie functions
+import { isSameDay, format } from 'date-fns'
 
 const COOKIE_NAME = 'favoriteRestaurants';
 
@@ -62,7 +63,7 @@ export function AvailabilityResults() {
     return (
       <div className="text-center text-muted-foreground mt-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3"></div>
-        Loading availability for {date}...
+        lemme check {date}...
       </div>
     )
   }
@@ -87,15 +88,33 @@ export function AvailabilityResults() {
   });
 
   return (
-    <div className="w-full max-w-3xl mt-4 space-y-6">
+    <div className="w-full max-w-3xl space-y-6">
+  
+        {hasFilteredResults && (
+          <div className="flex flex-col items-center">
+            <h3 className="text-lg font-semibold">
+              {dinnerOnly ? 'dinner ' : 'food '} 
+              for {numPeople},{' '}
+            {isSameDay(date, new Date())
+              ? `today, ${format(date, 'EEEE, MMMM d')}`
+              : format(date, 'eeee, MMMM d').toLowerCase()}
+            </h3>
+          </div>
+        )}
+      
       {!isLoading && !hasFilteredResults && (
         <h2 className="text-2xl font-semibold mb-4 text-center">
-          No results match your filters.
+          i don't have that one yet 🫵😹
         </h2>
       )}
 
       {!isLoading && !hasFilteredResults && (
-        <p className="text-center text-muted-foreground">Try adjusting your search or filters.</p>
+        <>
+        <p className="text-center text-muted-foreground">
+          <a href="https://instagram.com/ab_raza" className="underline">get dinner w/ me</a> there and i'll add it
+        </p>
+        </>
+
       )}
 
       {sortedResults.map(({ restaurantId, restaurantName, services, error: restaurantError }) => {
@@ -185,7 +204,7 @@ function ServiceTimes({ service }: { service: MinimalService }) {
     <div>
       <h4 className="text-md font-medium mb-1.5">{service.name}</h4>
       {service.times && service.times.length > 0 ? (
-        <ul className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+        <ul className="grid grid-cols-3 gap-2">
           {service.times.map((slot) => {
             const isShared = slot.onlySharedTablesRemain;
             const slotClasses = isShared 
@@ -194,7 +213,7 @@ function ServiceTimes({ service }: { service: MinimalService }) {
             return (
               <li 
                 key={slot.time} 
-                className={`text-sm font-medium text-center py-1.5 px-2 rounded-md shadow-sm ${slotClasses}`}
+                className={`text-sm font-medium text-center py-1.5 px-3 rounded-md shadow-sm ${slotClasses}`}
                 title={isShared ? 'Shared table only' : ''}
               >
                 {slot.name}{isShared ? '*' : ''}

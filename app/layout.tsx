@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: "dinner time",
-    description: "can i get uhhhh...",
+    description: "can i get uhhhh... dinner reservation?",
     icons: {
       icon: dataUri, // Set the default emoji data URI as the initial icon
     },
