@@ -96,8 +96,18 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const STAGGER_DELAY_MS = 300
+  const CACHE_TTL_MS = 5 * 60 * 1000
   const activeRequestIdRef = useRef(0)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
+  const availabilityCacheRef = useRef<
+    Map<
+      string,
+      {
+        timestamp: number
+        result: RestaurantDinnerAvailability
+      }
+    >
+  >(new Map())
 
   useEffect(() => {
     const slug = pathname?.slice(1).toLowerCase()
@@ -127,6 +137,13 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
     signal: AbortSignal
   ): Promise<RestaurantDinnerAvailability | null> => {
     try {
+      const cacheKey = `${restaurant.id}-${date}-${numPeople}`
+      const cached = availabilityCacheRef.current.get(cacheKey)
+      const now = Date.now()
+      if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+        return cached.result
+      }
+
       const res = await fetch(
         `/api/getAvailability?venueId=${restaurant.id}&date=${date}&numPeople=${numPeople}`,
         { signal }
@@ -136,12 +153,14 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
       }
       const data: MinimalBookingAvailabilityResponse = await res.json()
 
-      return {
+      const freshResult = {
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         services: data.services?.length ? data.services : null,
         error: null,
       }
+      availabilityCacheRef.current.set(cacheKey, { timestamp: now, result: freshResult })
+      return freshResult
     } catch (err) {
       if (signal.aborted) {
         return null
