@@ -6,8 +6,8 @@ import { parseISO, isValid as isValidDateFns, format as formatDate, getDay } fro
 import { RestaurantDinnerAvailability } from '@/app/types/availability'
 import { RESTAURANTS } from '@/app/const/restaurants'
 import { MinimalBookingAvailabilityResponse } from '@/app/types/api'
-import { getNextSaturday, sleep } from '@/lib/utils'
-import { getCookie } from 'cookies-next'
+import { getNextSaturday } from '@/lib/utils'
+import { getCookie, setCookie } from 'cookies-next'
 
 const COOKIE_NAME = 'favoriteRestaurants'
 
@@ -34,6 +34,8 @@ interface AvailabilityContextType {
   error: string | null
   results: RestaurantDinnerAvailability[]
   fetchAvailability: () => Promise<void>
+  favorites: string[]
+  toggleFavorite: (restaurantId: string) => void
 }
 
 const AvailabilityContext = createContext<AvailabilityContextType | null>(null)
@@ -95,7 +97,6 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
   const [results, setResults] = useState<RestaurantDinnerAvailability[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const STAGGER_DELAY_MS = 300
   const CACHE_TTL_MS = 5 * 60 * 1000
   const activeRequestIdRef = useRef(0)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
@@ -175,6 +176,16 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const toggleFavorite = (restaurantId: string) => {
+    setFavorites(prev => {
+      const next = prev.includes(restaurantId)
+        ? prev.filter(id => id !== restaurantId)
+        : [...prev, restaurantId]
+      setCookie(COOKIE_NAME, JSON.stringify(next))
+      return next
+    })
+  }
+
   const fetchAvailability = async () => {
     const requestId = activeRequestIdRef.current + 1
     activeRequestIdRef.current = requestId
@@ -198,38 +209,55 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
       return 0
     })
 
-    const [firstRestaurant, secondRestaurant, ...remainingRestaurants] = sortedRestaurants
-
-    if (!firstRestaurant) {
+    if (sortedRestaurants.length === 0) {
       setIsLoading(false)
       return
     }
 
     try {
-      const firstBatchPromises = [
-        fetchSingleRestaurant(firstRestaurant, controller.signal),
-        secondRestaurant ? fetchSingleRestaurant(secondRestaurant, controller.signal) : Promise.resolve(null)
-      ]
+      const CONCURRENCY = 3
+      const jitterMs = 30
+      const total = sortedRestaurants.length
+      let launched = 0
+      let active = 0
+      const resultsMap = new Map<string, RestaurantDinnerAvailability>()
 
-      const firstBatchResults = await Promise.all(firstBatchPromises)
-      if (activeRequestIdRef.current !== requestId) return
+      const launchNext = () => {
+        if (activeRequestIdRef.current !== requestId) return
+        if (launched >= total) {
+          if (active === 0) {
+            setIsLoading(false)
+          }
+          return
+        }
 
-      const seeded = firstBatchResults.filter((r): r is RestaurantDinnerAvailability => !!r)
-      setResults(seeded)
+        const restaurant = sortedRestaurants[launched++]
+        active += 1
 
-      for (const restaurant of remainingRestaurants) {
-        if (activeRequestIdRef.current !== requestId) break
-        await sleep(STAGGER_DELAY_MS)
-        if (activeRequestIdRef.current !== requestId) break
-
-        const result = await fetchSingleRestaurant(restaurant, controller.signal)
-        if (!result || activeRequestIdRef.current !== requestId) continue
-
-        setResults(prevResults => [...prevResults, result])
+        fetchSingleRestaurant(restaurant, controller.signal)
+          .then(result => {
+            if (result && activeRequestIdRef.current === requestId) {
+              resultsMap.set(result.restaurantId, result)
+              const ordered = sortedRestaurants
+                .map(r => resultsMap.get(r.id))
+                .filter((r): r is RestaurantDinnerAvailability => !!r)
+              setResults(ordered)
+            }
+          })
+          .finally(() => {
+            active -= 1
+            if (activeRequestIdRef.current !== requestId) return
+            if (launched < total) {
+              setTimeout(launchNext, jitterMs)
+            } else if (active === 0) {
+              setIsLoading(false)
+            }
+          })
       }
 
-      if (activeRequestIdRef.current === requestId) {
-        setIsLoading(false)
+      const initial = Math.min(CONCURRENCY, total)
+      for (let i = 0; i < initial; i += 1) {
+        launchNext()
       }
     } catch (err) {
       console.error("An unexpected error occurred during fetchAvailability:", err)
@@ -259,7 +287,9 @@ export function AvailabilityProvider({ children }: { children: ReactNode }) {
         isLoading,
         error,
         results,
-        fetchAvailability
+        fetchAvailability,
+        favorites,
+        toggleFavorite
       }}
     >
       {children}

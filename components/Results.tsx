@@ -5,43 +5,11 @@ import { useAvailability } from '@/app/contexts/AvailabilityContext'
 import { useAvailabilityFilter } from '@/hooks/useFilter'
 import { RESTAURANTS } from '@/app/const/restaurants'
 import { Heart } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { getCookie, setCookie } from 'cookies-next'; // Import cookie functions
+import { useMemo } from 'react'
 import { isSameDay, format, parseISO } from 'date-fns'
 import type { RestaurantDinnerAvailability } from '@/app/types/availability'
 
 type PendingAvailability = RestaurantDinnerAvailability & { isPending?: boolean }
-
-const COOKIE_NAME = 'favoriteRestaurants';
-
-// Helper function to get/set favorites
-const getFavorites = (): string[] => {
-  // Cookies can be read client-side without checking for window
-  try {
-    const favoritesCookie = getCookie(COOKIE_NAME); // Read from cookie
-    // Ensure it's a string before parsing
-    return favoritesCookie && typeof favoritesCookie === 'string' ? JSON.parse(favoritesCookie) : [];
-  } catch (error) {
-    console.error('Error reading favorites from cookie:', error);
-    return []; // Return empty on error
-  }
-};
-
-const toggleFavorite = (restaurantId: string) => {
-  const currentFavorites = getFavorites();
-  let updatedFavorites;
-  if (currentFavorites.includes(restaurantId)) {
-    updatedFavorites = currentFavorites.filter(id => id !== restaurantId);
-  } else {
-    updatedFavorites = [...currentFavorites, restaurantId];
-  }
-  // Set the cookie - works client-side
-  setCookie(COOKIE_NAME, JSON.stringify(updatedFavorites), {
-    // Optional: Add cookie options like path, expires, etc.
-    // path: '/',
-    // maxAge: 60 * 60 * 24 * 365, // 1 year
-  });
-};
 
 export function AvailabilityResults() {
   const {
@@ -51,31 +19,30 @@ export function AvailabilityResults() {
     date,
     numPeople,
     dinnerOnly,
-    searchTerm
+    searchTerm,
+    favorites,
+    toggleFavorite
   } = useAvailability()
 
   const filteredResults = useAvailabilityFilter(rawResults, searchTerm, dinnerOnly)
-  const [favorites, setFavorites] = useState<string[]>(() => getFavorites());
   const parsedDate = useMemo(() => {
     const next = parseISO(date)
     return isNaN(next.getTime()) ? new Date() : next
   }, [date])
 
   const handleToggleFavorite = (restaurantId: string) => {
-    toggleFavorite(restaurantId);
-    setFavorites(getFavorites()); // Re-fetch to update state
-  };
+    toggleFavorite(restaurantId)
+  }
 
   const sortedRestaurants = useMemo(() => {
-    const currentFavorites = getFavorites()
     return [...RESTAURANTS].sort((a, b) => {
-      const aIsFavorite = currentFavorites.includes(a.id)
-      const bIsFavorite = currentFavorites.includes(b.id)
+      const aIsFavorite = favorites.includes(a.id)
+      const bIsFavorite = favorites.includes(b.id)
       if (aIsFavorite && !bIsFavorite) return -1
       if (!aIsFavorite && bIsFavorite) return 1
       return 0
     })
-  }, [])
+  }, [favorites])
 
   const mergedResults = useMemo(() => {
     const includePending = isLoading && rawResults.length > 0

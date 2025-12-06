@@ -111,9 +111,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers: headers,
-      // You might need to configure caching behavior if Next.js aggressively caches
-      // cache: 'no-store',
-      next: { revalidate: 4 }
+      cache: 'no-store'
     })
 
     if (!response.ok) {

@@ -1,13 +1,15 @@
 'use client'
 
+import { Suspense } from 'react'
 import { AvailabilityProvider } from '../contexts/AvailabilityContext'
-import { HomeContent } from '../page'
+import HomeContent from '../HomeContent'
 
 export default function SlugPage() {
   return (
-    <AvailabilityProvider>
-      <HomeContent />
-    </AvailabilityProvider>
+    <Suspense fallback={null}>
+      <AvailabilityProvider>
+        <HomeContent />
+      </AvailabilityProvider>
+    </Suspense>
   )
 }
-
