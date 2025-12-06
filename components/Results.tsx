@@ -5,9 +5,12 @@ import { useAvailability } from '@/app/contexts/AvailabilityContext'
 import { useAvailabilityFilter } from '@/hooks/useFilter'
 import { RESTAURANTS } from '@/app/const/restaurants'
 import { Heart } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getCookie, setCookie } from 'cookies-next'; // Import cookie functions
-import { isSameDay, format } from 'date-fns'
+import { isSameDay, format, parseISO } from 'date-fns'
+import type { RestaurantDinnerAvailability } from '@/app/types/availability'
+
+type PendingAvailability = RestaurantDinnerAvailability & { isPending?: boolean }
 
 const COOKIE_NAME = 'favoriteRestaurants';
 
@@ -53,20 +56,53 @@ export function AvailabilityResults() {
 
   const filteredResults = useAvailabilityFilter(rawResults, searchTerm, dinnerOnly)
   const [favorites, setFavorites] = useState<string[]>(() => getFavorites());
+  const parsedDate = useMemo(() => {
+    const next = parseISO(date)
+    return isNaN(next.getTime()) ? new Date() : next
+  }, [date])
 
   const handleToggleFavorite = (restaurantId: string) => {
     toggleFavorite(restaurantId);
     setFavorites(getFavorites()); // Re-fetch to update state
   };
 
-  if (isLoading) {
-    return (
-      <div className="text-center text-muted-foreground mt-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3"></div>
-        lemme check {date}...
-      </div>
-    )
-  }
+  const sortedRestaurants = useMemo(() => {
+    const currentFavorites = getFavorites()
+    return [...RESTAURANTS].sort((a, b) => {
+      const aIsFavorite = currentFavorites.includes(a.id)
+      const bIsFavorite = currentFavorites.includes(b.id)
+      if (aIsFavorite && !bIsFavorite) return -1
+      if (!aIsFavorite && bIsFavorite) return 1
+      return 0
+    })
+  }, [])
+
+  const mergedResults = useMemo(() => {
+    const includePending = isLoading && rawResults.length > 0
+    const map = new Map(rawResults.map(r => [r.restaurantId, r]))
+
+    if (!includePending) {
+      return rawResults as PendingAvailability[]
+    }
+
+    return sortedRestaurants.map(r => {
+      const existing = map.get(r.id)
+      if (existing) return existing
+      return {
+        restaurantId: r.id,
+        restaurantName: r.name,
+        services: null,
+        error: null,
+        isPending: true,
+      } as const
+    }) as PendingAvailability[]
+  }, [isLoading, rawResults, sortedRestaurants])
+
+  const filteredMergedResults = useAvailabilityFilter(
+    mergedResults as RestaurantDinnerAvailability[],
+    searchTerm,
+    dinnerOnly
+  ) as PendingAvailability[]
 
   if (error) {
     return (
@@ -76,10 +112,12 @@ export function AvailabilityResults() {
     )
   }
 
-  const hasFilteredResults = filteredResults.length > 0;
+  const hasFilteredResults = filteredMergedResults.length > 0;
+  const isSearching = searchTerm.trim().length > 0;
+  const showSearchLoading = isLoading && isSearching && !hasFilteredResults;
 
   // Sort results: favorites first
-  const sortedResults = [...filteredResults].sort((a, b) => {
+  const sortedResults = [...filteredMergedResults].sort((a, b) => {
     const aIsFavorite = favorites.includes(a.restaurantId);
     const bIsFavorite = favorites.includes(b.restaurantId);
     if (aIsFavorite && !bIsFavorite) return -1; // a comes first
@@ -95,13 +133,20 @@ export function AvailabilityResults() {
             <h3 className="text-lg font-semibold">
               {dinnerOnly ? 'dinner ' : 'food '} 
               for {numPeople},{' '}
-            {isSameDay(date, new Date())
-              ? `today, ${format(date, 'EEEE, MMMM d')}`
-              : format(date, 'eeee, MMMM d').toLowerCase()}
+            {isSameDay(parsedDate, new Date())
+              ? `today, ${format(parsedDate, 'EEEE, MMMM d')}`
+              : format(parsedDate, 'eeee, MMMM d').toLowerCase()}
             </h3>
           </div>
         )}
       
+      {showSearchLoading && (
+        <div className="flex items-center justify-center text-muted-foreground gap-2">
+          <div className="h-3 w-3 rounded-full border-b-2 border-primary animate-spin" />
+          lemme see...
+        </div>
+      )}
+
       {!isLoading && !hasFilteredResults && (
         <h2 className="text-2xl font-semibold mb-4 text-center">
           i don't have that one yet 😭
@@ -117,7 +162,7 @@ export function AvailabilityResults() {
 
       )}
 
-      {sortedResults.map(({ restaurantId, restaurantName, services, error: restaurantError }) => {
+      {sortedResults.map(({ restaurantId, restaurantName, services, error: restaurantError, isPending }) => {
         const restaurant = RESTAURANTS.find(r => r.id === restaurantId);
         const isFavorite = favorites.includes(restaurantId);
 
@@ -147,6 +192,7 @@ interface AvailabilityResultCardProps {
   isFavorite: boolean;
   onToggleFavorite: (restaurantId: string) => void;
   dinnerOnly: boolean;
+  isPending?: boolean;
 }
 
 function AvailabilityResultCard({
@@ -157,7 +203,8 @@ function AvailabilityResultCard({
   restaurantError,
   isFavorite,
   onToggleFavorite,
-  dinnerOnly
+  dinnerOnly,
+  isPending
 }: AvailabilityResultCardProps) {
 
   const handleStarClick = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -173,7 +220,12 @@ function AvailabilityResultCard({
         className={`absolute top-3 right-3 h-5 w-5 cursor-pointer ${isFavorite ? 'text-red-500 fill-red-500' : 'text-muted-foreground'}`}
       />
       <h3 className="text-xl font-medium mb-3 pr-8">{restaurantName}</h3>
-      {restaurantError ? (
+      {isPending ? (
+        <p className="text-sm text-muted-foreground italic flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full border-b-2 border-primary animate-spin" />
+          loading availability...
+        </p>
+      ) : restaurantError ? (
         <p className="text-sm text-destructive italic">Error: {restaurantError}</p>
       ) : services && services.length > 0 ? (
         <div className="space-y-3">

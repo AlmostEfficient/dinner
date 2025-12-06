@@ -13,7 +13,7 @@ export default function HomePage() {
   )
 }
 
-function HomeContent() {
+export function HomeContent() {
   const { date, numPeople, dinnerOnly } = useAvailability()
   const selectedDate = parseISO(date)
 
